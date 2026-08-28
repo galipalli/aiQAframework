@@ -124,6 +124,7 @@ class Crawler:
         self._nav_graph: dict[str, list[str]] = {}
         self._api_endpoints: dict[str, APIEndpoint] = {}
         self._is_spa: bool = False
+        self._semaphore = asyncio.Semaphore(self.crawl_config.max_concurrent_requests)
 
     async def crawl(self) -> SiteModel:
         """Execute the crawl and return a SiteModel."""
@@ -298,63 +299,68 @@ class Crawler:
             if len(self._visited_urls) > 1:
                 await human_delay(page, min_ms=300, max_ms=1200)
 
-            try:
-                loaded = await self._navigate_with_retry(page, url)
-                if not loaded:
-                    logger.warning("Failed to load: %s", url)
-                    continue
+            # Configurable request delay
+            if self.crawl_config.request_delay_seconds > 0:
+                await asyncio.sleep(self.crawl_config.request_delay_seconds)
 
-                # Detect SPA on first page
-                if len(self._visited_urls) == 1:
-                    spa_type = await detect_spa_type(page)
-                    self._is_spa = spa_type != "traditional"
-                    if self._is_spa:
-                        logger.info("SPA detected (routing: %s)", spa_type)
-
-                # Process page content
-                logger.debug("Extracting page content: elements, forms, screenshots...")
-                page_model = await self._process_page(page, url, network_requests)
-                self._pages.append(page_model)
-                logger.debug("Page processed: %d elements, %d forms, %d network requests",
-                             len(page_model.elements), len(page_model.forms),
-                             len(page_model.network_requests))
-
-                # === LINK DISCOVERY ===
-                logger.debug("Discovering links on page...")
-                discovered = await self._discover_all_links(page, url)
-
-                # Build nav graph and queue discovered links at ORGANIC priority
-                pid = page_model.page_id
-                self._nav_graph[pid] = []
-                organic_count = 0
-                for link_url in discovered:
-                    if not _is_valid_page_url(link_url):
-                        continue
-                    if not _is_same_origin(self.crawl_config.target_url, link_url):
+            async with self._semaphore:
+                try:
+                    loaded = await self._navigate_with_retry(page, url)
+                    if not loaded:
+                        logger.warning("Failed to load: %s", url)
                         continue
 
-                    link_id = _page_id(link_url)
-                    self._nav_graph[pid].append(link_id)
+                    # Detect SPA on first page
+                    if len(self._visited_urls) == 1:
+                        spa_type = await detect_spa_type(page)
+                        self._is_spa = spa_type != "traditional"
+                        if self._is_spa:
+                            logger.info("SPA detected (routing: %s)", spa_type)
 
-                    if self._enqueue(heap, link_url, depth + 1, PRIORITY_ORGANIC):
-                        organic_count += 1
+                    # Process page content
+                    logger.debug("Extracting page content: elements, forms, screenshots...")
+                    page_model = await self._process_page(page, url, network_requests)
+                    self._pages.append(page_model)
+                    logger.debug("Page processed: %d elements, %d forms, %d network requests",
+                                 len(page_model.elements), len(page_model.forms),
+                                 len(page_model.network_requests))
 
-                logger.info(
-                    "Page '%s' — %d links found, %d new queued",
-                    page_model.title or url, len(discovered), organic_count,
-                )
+                    # === LINK DISCOVERY ===
+                    logger.debug("Discovering links on page...")
+                    discovered = await self._discover_all_links(page, url)
 
-                # After the first page is processed, load sitemap as backfill
-                if not sitemap_loaded:
-                    sitemap_loaded = True
-                    sitemap_count = await self._load_sitemap_backfill(
-                        context, start_url, heap
+                    # Build nav graph and queue discovered links at ORGANIC priority
+                    pid = page_model.page_id
+                    self._nav_graph[pid] = []
+                    organic_count = 0
+                    for link_url in discovered:
+                        if not _is_valid_page_url(link_url):
+                            continue
+                        if not _is_same_origin(self.crawl_config.target_url, link_url):
+                            continue
+
+                        link_id = _page_id(link_url)
+                        self._nav_graph[pid].append(link_id)
+
+                        if self._enqueue(heap, link_url, depth + 1, PRIORITY_ORGANIC):
+                            organic_count += 1
+
+                    logger.info(
+                        "Page '%s' — %d links found, %d new queued",
+                        page_model.title or url, len(discovered), organic_count,
                     )
-                    if sitemap_count:
-                        logger.info("Sitemap backfill: %d URLs queued", sitemap_count)
 
-            except Exception as e:
-                logger.error("Error crawling %s: %s", url, e)
+                    # After the first page is processed, load sitemap as backfill
+                    if not sitemap_loaded:
+                        sitemap_loaded = True
+                        sitemap_count = await self._load_sitemap_backfill(
+                            context, start_url, heap
+                        )
+                        if sitemap_count:
+                            logger.info("Sitemap backfill: %d URLs queued", sitemap_count)
+
+                except Exception as e:
+                    logger.error("Error crawling %s: %s", url, e)
 
         await page.close()
 

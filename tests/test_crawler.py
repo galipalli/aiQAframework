@@ -188,7 +188,8 @@ def _make_config(tmp_path, **overrides):
     crawl_overrides = {}
     for key in list(overrides):
         if key in ("target_url", "max_pages", "max_depth", "include_patterns",
-                    "exclude_patterns", "wait_for_idle"):
+                    "exclude_patterns", "wait_for_idle", "request_delay_seconds",
+                    "max_concurrent_requests"):
             crawl_overrides[key] = overrides.pop(key)
 
     crawl = CrawlConfig(
@@ -198,6 +199,8 @@ def _make_config(tmp_path, **overrides):
         include_patterns=crawl_overrides.get("include_patterns", []),
         exclude_patterns=crawl_overrides.get("exclude_patterns", []),
         wait_for_idle=crawl_overrides.get("wait_for_idle", False),
+        request_delay_seconds=crawl_overrides.get("request_delay_seconds", 0.0),
+        max_concurrent_requests=crawl_overrides.get("max_concurrent_requests", 1),
     )
     return FrameworkConfig(
         target_url=crawl.target_url,
