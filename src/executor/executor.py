@@ -44,6 +44,20 @@ class Executor:
         visual_registry: VisualBaselineRegistry | None = None,
         visual_registry_manager: VisualBaselineRegistryManager | None = None,
     ):
+        """Initialize the executor with configuration and output directories.
+
+        Args:
+            config: Framework configuration including parallel context limits,
+                auth settings, video capture mode, and timeouts.
+            ai_client: Optional AI client for intelligent fallback when
+                selectors or steps fail during execution.
+            runs_dir: Root directory for storing run artifacts, evidence,
+                and video recordings.
+            visual_registry: Optional visual baseline registry for screenshot
+                diff comparisons.
+            visual_registry_manager: Optional manager for persisting updated
+                visual baselines after execution.
+        """
         self.config = config
         self.ai_client = ai_client
         self.runs_dir = runs_dir

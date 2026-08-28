@@ -111,6 +111,16 @@ class Crawler:
     """
 
     def __init__(self, config: FrameworkConfig, output_dir: Path, ai_client=None):
+        """Initialize the crawler with configuration and output location.
+
+        Args:
+            config: Framework configuration with crawl settings including
+                target URL, max pages, max depth, viewport, and user agent.
+            output_dir: Directory for storing baselines (screenshots, DOM
+                snapshots) captured during crawling.
+            ai_client: Optional AI client used for smart form analysis and
+                link classification during crawl.
+        """
         self.config = config
         self.crawl_config = config.crawl
         self.output_dir = output_dir
@@ -126,7 +136,17 @@ class Crawler:
         self._is_spa: bool = False
 
     async def crawl(self) -> SiteModel:
-        """Execute the crawl and return a SiteModel."""
+        """Execute the crawl and return a SiteModel.
+
+        Launches a stealth browser, optionally authenticates, then performs
+        a priority-based crawl of the target site. Organic (in-page) links
+        are processed before sitemap backfill URLs. After discovery, each
+        page is probed for auth requirements.
+
+        Returns:
+            SiteModel: The complete site structure including all discovered
+                pages, navigation graph, API endpoints, and crawl metadata.
+        """
         start_time = time.time()
         target = self.crawl_config.target_url
         logger.info("Starting crawl of %s", target)

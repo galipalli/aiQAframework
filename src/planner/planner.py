@@ -30,6 +30,14 @@ class Planner:
     """Generates test plans using AI analysis of the site model and coverage gaps."""
 
     def __init__(self, config: FrameworkConfig, ai_client: AIClient):
+        """Initialize the planner with configuration and AI client.
+
+        Args:
+            config: Framework configuration including categories, max tests,
+                viewports, hints, and AI token limits.
+            ai_client: The AI client used to generate test plans from
+                site model and coverage gap analysis.
+        """
         self.config = config
         self.ai_client = ai_client
 
@@ -39,7 +47,25 @@ class Planner:
         coverage_registry: CoverageRegistry | None = None,
         gap_report: CoverageGapReport | None = None,
     ) -> TestPlan:
-        """Generate a test plan from the site model and coverage data."""
+        """Generate a test plan from the site model and coverage data.
+
+        Summarizes the site model for the AI context window, builds a
+        planning prompt incorporating coverage gaps and configuration
+        hints, and requests a structured test plan from the AI provider.
+        Falls back to a rule-based plan if the AI request fails. Auth
+        placeholder tokens are resolved after parsing.
+
+        Args:
+            site_model: The discovered site structure from the crawl stage.
+            coverage_registry: Optional existing coverage registry for gap
+                analysis context.
+            gap_report: Optional pre-computed coverage gap report to guide
+                test generation toward uncovered areas.
+
+        Returns:
+            TestPlan: A validated test plan with prioritized test cases
+                ready for execution.
+        """
         logger.info("Generating test plan for %s", site_model.base_url)
 
         # Build a summarized site model (to fit in context window)

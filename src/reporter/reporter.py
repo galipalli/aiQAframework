@@ -24,6 +24,14 @@ class Reporter:
     """Generates reports from test results."""
 
     def __init__(self, config: FrameworkConfig, ai_client: AIClient | None = None):
+        """Initialize the reporter with configuration and optional AI client.
+
+        Args:
+            config: Framework configuration including report output directory
+                and enabled report formats (html, json).
+            ai_client: Optional AI client for generating natural-language
+                test result summaries.
+        """
         self.config = config
         self.ai_client = ai_client
 
@@ -34,7 +42,22 @@ class Reporter:
         previous_run: RunResult | None = None,
         output_dir: Path | None = None,
     ) -> dict[str, str]:
-        """Generate all configured report formats. Returns format -> file path."""
+        """Generate all configured report formats. Returns format -> file path.
+
+        Produces HTML and/or JSON reports based on the configured formats.
+        Optionally generates an AI-powered summary and detects regressions
+        against a previous run.
+
+        Args:
+            run_result: The completed test run results.
+            registry: Optional coverage registry for inclusion in reports.
+            previous_run: Optional prior run result for regression detection.
+            output_dir: Optional override for the report output directory.
+
+        Returns:
+            dict[str, str]: Mapping of format names to generated file paths.
+                Keys are 'html' and/or 'json'.
+        """
         out_dir = output_dir or Path(self.config.report_output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         generated = {}

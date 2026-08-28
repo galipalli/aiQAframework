@@ -51,6 +51,23 @@ class AIClient:
         provider: str = "anthropic",
         base_url: str | None = None,
     ):
+        """Initialize the AI client for the specified provider.
+
+        For Anthropic, requires the ANTHROPIC_API_KEY environment variable
+        to be set. For Ollama, uses the OLLAMA_BASE_URL environment variable
+        or defaults to http://localhost:11434.
+
+        Args:
+            model: The model identifier to use for completions.
+            max_tokens: Maximum tokens to request per completion.
+            provider: The AI provider to use ('anthropic' or 'ollama').
+            base_url: Optional override for the provider base URL (primarily
+                used for Ollama).
+
+        Raises:
+            ValueError: If an unsupported provider is specified.
+            EnvironmentError: If the Anthropic API key is not configured.
+        """
         self.provider = provider.strip().lower()
         if self.provider not in {"anthropic", "ollama"}:
             raise ValueError(
@@ -172,7 +189,25 @@ class AIClient:
         max_tokens: Optional[int] = None,
         temperature: float = 0.3,
     ) -> str:
-        """Send a completion request to the configured provider."""
+        """Send a completion request to the configured provider.
+
+        Retries on transient errors with exponential backoff. Logs the full
+        exchange to the debug directory for later inspection.
+
+        Args:
+            system_prompt: The system prompt setting the AI behavior.
+            user_message: The user message containing the task context.
+            max_tokens: Maximum tokens to generate. Falls back to the
+                instance default if not provided.
+            temperature: Sampling temperature for response randomness.
+
+        Returns:
+            str: The AI-generated text response.
+
+        Raises:
+            RuntimeError: If the provider returns an error after all retries
+                are exhausted.
+        """
         self._call_count += 1
         tokens = max_tokens or self.max_tokens
         logger.info(
@@ -245,7 +280,25 @@ class AIClient:
         max_tokens: Optional[int] = None,
         temperature: float = 0.2,
     ) -> dict[str, Any]:
-        """Send a completion request and parse the response as JSON."""
+        """Send a completion request and parse the response as JSON.
+
+        Wraps `complete()` with JSON parsing that handles common LLM output
+        quirks like markdown code fences, trailing commas, and control
+        characters.
+
+        Args:
+            system_prompt: The system prompt setting the AI behavior.
+            user_message: The user message requesting structured output.
+            max_tokens: Maximum tokens to generate.
+            temperature: Sampling temperature (lowered to 0.2 by default for
+                more deterministic JSON output).
+
+        Returns:
+            dict[str, Any]: The parsed JSON response.
+
+        Raises:
+            ValueError: If the response cannot be parsed as JSON.
+        """
         text = self.complete(system_prompt, user_message, max_tokens, temperature)
         return self._parse_json_response(text)
 
@@ -257,7 +310,24 @@ class AIClient:
         media_type: str = "image/png",
         max_tokens: Optional[int] = None,
     ) -> str:
-        """Send a completion request with an image (for fallback analysis)."""
+        """Send a completion request with an image (for fallback analysis).
+
+        Supports image attachments for multimodal AI analysis, primarily
+        used when visual test failures require AI-assisted diagnosis.
+
+        Args:
+            system_prompt: The system prompt setting the AI behavior.
+            user_message: The user message with analysis instructions.
+            image_base64: Base64-encoded image data to attach.
+            media_type: MIME type of the image (default 'image/png').
+            max_tokens: Maximum tokens to generate.
+
+        Returns:
+            str: The AI-generated text response analyzing the image.
+
+        Raises:
+            RuntimeError: If the provider returns an error after retries.
+        """
         self._call_count += 1
         tokens = max_tokens or self.max_tokens
         logger.info(

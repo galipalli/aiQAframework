@@ -29,6 +29,16 @@ class Orchestrator:
     """Coordinates the full QA pipeline."""
 
     def __init__(self, config: FrameworkConfig):
+        """Initialize the orchestrator with configuration and sub-components.
+
+        Sets up directories, AI client, coverage registries, and visual
+        baseline management. The AI client is optional — the framework
+        falls back to rule-based behavior when unavailable.
+
+        Args:
+            config: Framework configuration including target URL, categories,
+                and AI provider settings.
+        """
         self.config = config
         self.framework_dir = Path(".qa-framework")
         self.framework_dir.mkdir(exist_ok=True)
@@ -139,7 +149,12 @@ class Orchestrator:
         return await crawler.crawl()
 
     def run_crawl_only(self) -> SiteModel:
-        """Run only the crawl stage."""
+        """Run only the crawl stage and return the site model.
+
+        Returns:
+            SiteModel: The discovered site structure including pages,
+                navigation graph, and API endpoints.
+        """
         return asyncio.run(self._crawl())
 
     def _plan(self, site_model: SiteModel) -> TestPlan:
@@ -155,7 +170,17 @@ class Orchestrator:
         return planner.generate_plan(site_model, registry, gap_report)
 
     def run_plan_only(self) -> TestPlan:
-        """Run only the planning stage (requires existing site model)."""
+        """Run only the planning stage (requires existing site model).
+
+        Loads the previously saved site model and generates a test plan
+        from it, incorporating coverage gap analysis.
+
+        Returns:
+            TestPlan: The generated test plan with prioritized test cases.
+
+        Raises:
+            FileNotFoundError: If no site model has been saved yet.
+        """
         site_model = self._load_site_model()
         return self._plan(site_model)
 
@@ -173,7 +198,15 @@ class Orchestrator:
         return result
 
     def run_execute_only(self, plan: TestPlan) -> RunResult:
-        """Run only the execution stage with a given plan."""
+        """Run only the execution stage with a given plan.
+
+        Args:
+            plan: The test plan to execute against the live site.
+
+        Returns:
+            RunResult: Aggregated test results including pass/fail counts,
+                durations, evidence paths, and assertion details.
+        """
         return asyncio.run(self._execute(plan))
 
     def _report(
@@ -209,7 +242,11 @@ class Orchestrator:
             json.dump(plan.model_dump(), f, indent=2, default=str)
 
     def _save_run_result(self, run_result: RunResult) -> None:
-        """Persist RunResult to the run directory for future regression comparison."""
+        """Persist RunResult to the run directory for future regression comparison.
+
+        Args:
+            run_result: The completed run result to persist.
+        """
         path = self.runs_dir / run_result.run_id / "run_result.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         logger.debug("Saving run result to %s", path)
@@ -217,7 +254,19 @@ class Orchestrator:
             json.dump(run_result.model_dump(), f, indent=2, default=str)
 
     def _load_previous_run_result(self, current_run_id: str) -> RunResult | None:
-        """Load the most recent previous RunResult from existing JSON reports."""
+        """Load the most recent previous RunResult from existing JSON reports.
+
+        Skips reports belonging to the current run so that regression
+        detection only compares against genuinely prior runs.
+
+        Args:
+            current_run_id: The run ID of the current execution, used to
+                skip the matching report file.
+
+        Returns:
+            RunResult | None: The most recent prior run result, or None if
+                no previous reports exist.
+        """
         report_dir = Path(self.config.report_output_dir)
         if not report_dir.exists():
             return None
@@ -242,12 +291,27 @@ class Orchestrator:
         return None
 
     def get_coverage_summary(self) -> str:
-        """Get a human-readable coverage summary."""
+        """Get a human-readable coverage summary.
+
+        Loads the coverage registry and computes per-category and overall
+        coverage scores.
+
+        Returns:
+            str: A formatted string describing current coverage state.
+        """
         registry = self.registry_manager.load()
         return calculate_coverage_summary(registry)
 
     def get_coverage_gaps(self) -> str:
-        """Get coverage gap analysis."""
+        """Get coverage gap analysis.
+
+        Identifies pages and categories that lack test coverage by
+        comparing the coverage registry against the current site model.
+
+        Returns:
+            str: A JSON-formatted gap report with uncovered pages and
+                stale coverage entries.
+        """
         registry = self.registry_manager.load()
         site_model = self._load_site_model()
         gaps = analyze_gaps(registry, site_model, self.config.staleness_threshold_days)
