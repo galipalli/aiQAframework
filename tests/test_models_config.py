@@ -55,6 +55,8 @@ class TestCrawlConfig:
         assert config.wait_for_idle is True
         assert isinstance(config.viewport, ViewportConfig)
         assert config.user_agent is None
+        assert config.request_delay_seconds == 0.0
+        assert config.max_concurrent_requests == 1
 
     def test_custom_patterns(self):
         """Test CrawlConfig with custom include/exclude patterns."""
@@ -71,6 +73,15 @@ class TestCrawlConfig:
         config = CrawlConfig(viewport=viewport)
         assert config.viewport.width == 1920
         assert config.viewport.name == "large"
+
+    def test_custom_throttle_settings(self):
+        """Test CrawlConfig with custom throttle settings."""
+        config = CrawlConfig(
+            request_delay_seconds=0.5,
+            max_concurrent_requests=3,
+        )
+        assert config.request_delay_seconds == 0.5
+        assert config.max_concurrent_requests == 3
 
 
 class TestAuthConfig:

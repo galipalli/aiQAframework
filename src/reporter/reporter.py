@@ -15,6 +15,7 @@ from src.models.test_result import RunResult
 
 from .html_report import generate_html_report
 from .json_report import generate_json_report
+from .junit_report import generate_junit_xml
 from .regression_detector import detect_regressions
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,13 @@ class Reporter:
             generate_json_report(run_result, regressions, path)
             generated["json"] = str(path)
             logger.info("JSON report: %s", path)
+
+        if "junit" in self.config.report_formats:
+            path = out_dir / f"report_{run_result.run_id}.xml"
+            logger.debug("Generating JUnit XML report...")
+            generate_junit_xml(run_result, path)
+            generated["junit"] = str(path)
+            logger.info("JUnit XML report: %s", path)
 
         return generated
 

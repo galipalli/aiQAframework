@@ -27,6 +27,8 @@ class CrawlConfig(BaseModel):
     wait_for_idle: bool = True
     viewport: ViewportConfig = Field(default_factory=ViewportConfig)
     user_agent: Optional[str] = None
+    request_delay_seconds: float = 0.0
+    max_concurrent_requests: int = 1
 
 
 class AuthConfig(BaseModel):
