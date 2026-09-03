@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "ports": {"preview": 3000, "additional": {}},
+  "scripts": {
+    "setup": {"enabled": true, "command": "pip3 install --break-system-packages -r requirements.txt"},
+    "run": {"enabled": true, "command": null},
+    "archive": {"enabled": true, "command": null},
+    "check": {"enabled": true, "command": "python3 -m pytest -m \"not requires_api and not requires_browser and not e2e\""}
+  },
+  "mcpServers": []
+}

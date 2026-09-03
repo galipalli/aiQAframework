@@ -29,6 +29,20 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
+def load_config(config: str) -> FrameworkConfig:
+    """Load a config file, exiting with a friendly message on common failures."""
+    try:
+        return FrameworkConfig.load(config)
+    except FileNotFoundError:
+        console.print(f"[red]Config file not found: {config}[/red]")
+        console.print("Create one with 'python -m src.cli init --target <url>'.")
+        sys.exit(1)
+    except json.JSONDecodeError:
+        console.print(f"[red]Config file is not valid JSON: {config}[/red]")
+        console.print(f"Fix {config} or regenerate it with 'python -m src.cli init'.")
+        sys.exit(1)
+
+
 @click.group()
 @click.option("--verbose", "-v", is_flag=True, help="Enable debug logging")
 def cli(verbose: bool) -> None:
@@ -40,12 +54,7 @@ def cli(verbose: bool) -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def run(config: str) -> None:
     """Run the full QA pipeline: crawl → plan → execute → report."""
-    try:
-        cfg = FrameworkConfig.load(config)
-    except FileNotFoundError:
-        console.print(f"[red]Config file not found: {config}[/red]")
-        console.print("Run 'qa-framework init' to create a default config.")
-        sys.exit(1)
+    cfg = load_config(config)
 
     orchestrator = Orchestrator(cfg)
     results = orchestrator.run_full_pipeline()
@@ -73,7 +82,7 @@ def run(config: str) -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def crawl(config: str) -> None:
     """Crawl the target site and build a site model."""
-    cfg = FrameworkConfig.load(config)
+    cfg = load_config(config)
     orchestrator = Orchestrator(cfg)
     site_model = orchestrator.run_crawl_only()
     console.print(f"[green]Crawl complete:[/green] {len(site_model.pages)} pages discovered")
@@ -83,7 +92,7 @@ def crawl(config: str) -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def plan(config: str) -> None:
     """Generate a test plan from the existing site model."""
-    cfg = FrameworkConfig.load(config)
+    cfg = load_config(config)
     orchestrator = Orchestrator(cfg)
     try:
         test_plan = orchestrator.run_plan_only()
@@ -98,9 +107,17 @@ def plan(config: str) -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def execute(plan_file: str, config: str) -> None:
     """Execute a saved test plan."""
-    cfg = FrameworkConfig.load(config)
-    with open(plan_file) as f:
-        plan_data = json.load(f)
+    cfg = load_config(config)
+    try:
+        with open(plan_file) as f:
+            plan_data = json.load(f)
+    except FileNotFoundError:
+        console.print(f"[red]Test plan file not found: {plan_file}[/red]")
+        console.print("Generate one with 'python -m src.cli plan' (.qa-framework/latest_plan.json).")
+        sys.exit(1)
+    except json.JSONDecodeError:
+        console.print(f"[red]Test plan file is not valid JSON: {plan_file}[/red]")
+        sys.exit(1)
     test_plan = TestPlan(**plan_data)
 
     orchestrator = Orchestrator(cfg)
@@ -117,7 +134,7 @@ def execute(plan_file: str, config: str) -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def coverage(gaps: bool, reset: bool, config: str) -> None:
     """View or manage coverage data."""
-    cfg = FrameworkConfig.load(config)
+    cfg = load_config(config)
     orchestrator = Orchestrator(cfg)
 
     if reset:
@@ -130,7 +147,7 @@ def coverage(gaps: bool, reset: bool, config: str) -> None:
             gap_text = orchestrator.get_coverage_gaps()
             console.print(gap_text)
         except FileNotFoundError:
-            console.print("[yellow]No site model found. Run 'qa-framework crawl' first.[/yellow]")
+            console.print("[yellow]No site model found. Run 'python -m src.cli crawl' first.[/yellow]")
         return
 
     summary = orchestrator.get_coverage_summary()
@@ -150,9 +167,9 @@ def init(target: str) -> None:
     cfg.save(config_path)
     console.print(f"[green]Created {config_path}[/green]")
     console.print("\nYou can now customize this file and run:")
-    console.print("  [blue]qa-framework run[/blue]")
+    console.print("  [blue]python -m src.cli run[/blue]")
     console.print("\nOptional: Add hints to guide the AI planner:")
-    console.print('  [blue]qa-framework hint add "The checkout flow is critical"[/blue]')
+    console.print('  [blue]python -m src.cli hint add "The checkout flow is critical"[/blue]')
 
 
 @cli.group()
@@ -166,7 +183,7 @@ def hint() -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def hint_add(text: str, config: str) -> None:
     """Add a hint to the configuration."""
-    cfg = FrameworkConfig.load(config)
+    cfg = load_config(config)
     cfg.hints.append(text)
     cfg.save(config)
     console.print(f"[green]Added hint:[/green] {text}")
@@ -176,7 +193,7 @@ def hint_add(text: str, config: str) -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def hint_list(config: str) -> None:
     """List all current hints."""
-    cfg = FrameworkConfig.load(config)
+    cfg = load_config(config)
     if not cfg.hints:
         console.print("[yellow]No hints configured[/yellow]")
         return
@@ -188,7 +205,7 @@ def hint_list(config: str) -> None:
 @click.option("--config", "-c", default="qa-config.json", help="Config file path")
 def hint_clear(config: str) -> None:
     """Remove all hints."""
-    cfg = FrameworkConfig.load(config)
+    cfg = load_config(config)
     cfg.hints = []
     cfg.save(config)
     console.print("[green]All hints cleared[/green]")
