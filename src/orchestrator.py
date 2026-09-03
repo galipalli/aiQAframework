@@ -197,7 +197,7 @@ class Orchestrator:
     def _load_site_model(self) -> SiteModel:
         path = self.framework_dir / "site_model" / "model.json"
         if not path.exists():
-            raise FileNotFoundError("No site model found. Run 'qa-framework crawl' first.")
+            raise FileNotFoundError("No site model found. Run 'python -m src.cli crawl' first.")
         with open(path) as f:
             data = json.load(f)
         return SiteModel(**data)
